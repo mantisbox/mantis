@@ -81,6 +81,7 @@
     "./cli-entry": "./openclaw.mjs"
   },
   "scripts": {
+    "mantis": "./mantis",
     "android:assemble": "cd apps/android && ./gradlew :app:assembleDebug",
     "android:install": "cd apps/android && ./gradlew :app:installDebug",
     "android:run": "cd apps/android && ./gradlew :app:installDebug && adb shell am start -n ai.openclaw.android/.MainActivity",
