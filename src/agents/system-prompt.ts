@@ -399,7 +399,7 @@ export function buildAgentSystemPrompt(params: {
     "",
     ...buildSafetySection(),
     "## OpenClaw CLI Quick Reference",
-    "OpenClaw is controlled via subcommands. Do not invent commands.",
+    "Mantis is controlled via subcommands. Do not invent commands.",
     "To manage the Gateway daemon service (start/stop/restart):",
     "- openclaw gateway status",
     "- openclaw gateway start",
