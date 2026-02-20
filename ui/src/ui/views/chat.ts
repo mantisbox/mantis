@@ -8,6 +8,8 @@ import {
   renderMessageGroup,
   renderReadingIndicatorGroup,
   renderStreamingGroup,
+  renderStatusIndicator,
+  type StatusIndicatorState,
 } from "../chat/grouped-render";
 import { normalizeMessage, normalizeRoleForGrouping } from "../chat/message-normalizer";
 import { icons } from "../icons";
@@ -20,6 +22,13 @@ export type CompactionIndicatorStatus = {
   completedAt: number | null;
 };
 
+export type ActionStatusIndicator = {
+  id: string;
+  text: string;
+  state: StatusIndicatorState;
+  createdAt: number;
+};
+
 export type ChatProps = {
   sessionKey: string;
   onSessionKeyChange: (next: string) => void;
@@ -29,6 +38,7 @@ export type ChatProps = {
   sending: boolean;
   canAbort?: boolean;
   compactionStatus?: CompactionIndicatorStatus | null;
+  actionStatus?: ActionStatusIndicator[];
   messages: unknown[];
   toolMessages: unknown[];
   stream: string | null;
@@ -244,6 +254,10 @@ export function renderChat(props: ChatProps) {
               assistantName: props.assistantName,
               assistantAvatar: assistantIdentity.avatar,
             });
+          }
+
+          if (item.kind === "status") {
+            return renderStatusIndicator(item.text, item.state, item.id);
           }
 
           return nothing;
@@ -510,6 +524,18 @@ function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
     } else {
       items.push({ kind: "reading-indicator", key });
     }
+  }
+
+  // Add action status indicators at the end
+  const actionStatuses = props.actionStatus ?? [];
+  for (const status of actionStatuses) {
+    items.push({
+      kind: "status",
+      key: `status:${status.id}`,
+      id: status.id,
+      text: status.text,
+      state: status.state,
+    });
   }
 
   return groupMessages(items);

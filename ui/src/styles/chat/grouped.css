@@ -271,3 +271,101 @@ img.chat-avatar {
     transform: translateY(0);
   }
 }
+
+/* =============================================
+   STATUS INDICATORS (Mantis action states)
+   ============================================= */
+
+.chat-status-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 16px;
+  margin-left: 4px;
+  margin-right: 16px;
+  animation: statusFadeIn 0.3s ease-out;
+}
+
+.chat-status-spacer {
+  width: 40px;
+  flex-shrink: 0;
+}
+
+.chat-status-bubble {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--accent-subtle);
+  border: 1px solid rgba(16, 185, 129, 0.12);
+  transition: all 0.4s ease;
+}
+
+.chat-status-bubble.active {
+  color: var(--text);
+  background: var(--accent-subtle);
+  border-color: rgba(16, 185, 129, 0.25);
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.15), 0 0 16px rgba(16, 185, 129, 0.12);
+}
+
+.chat-status-bubble.complete {
+  color: var(--accent);
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.20);
+}
+
+.chat-status-bubble.fading {
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: all 0.5s ease;
+}
+
+@keyframes statusFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chat-status-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(16, 185, 129, 0.25);
+  border-top-color: var(--accent);
+  animation: statusSpin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes statusSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.chat-status-check {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.chat-status-check svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

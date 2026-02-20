@@ -249,6 +249,55 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
       host.execApprovalQueue = removeExecApproval(host.execApprovalQueue, resolved.id);
     }
   }
+
+  if (evt.event === "action.status") {
+    handleActionStatusEvent(host, evt.payload);
+  }
+}
+
+type ActionStatusPayload = {
+  id: string;
+  text: string;
+  state: "active" | "complete" | "fading" | "remove";
+};
+
+function handleActionStatusEvent(host: GatewayHost, payload: unknown) {
+  const p = payload as ActionStatusPayload | undefined;
+  if (!p || typeof p.id !== "string") {
+    return;
+  }
+
+  const existing = (host as unknown as { chatActionStatus: Array<{ id: string; text: string; state: string; createdAt: number }> }).chatActionStatus ?? [];
+
+  if (p.state === "remove" || p.state === "fading") {
+    // Remove the status indicator (with optional fade delay)
+    if (p.state === "fading") {
+      // Mark as fading first, then remove after animation
+      (host as unknown as { chatActionStatus: Array<{ id: string; text: string; state: string; createdAt: number }> }).chatActionStatus = existing.map((s) =>
+        s.id === p.id ? { ...s, state: "fading" } : s,
+      );
+      window.setTimeout(() => {
+        const current = (host as unknown as { chatActionStatus: Array<{ id: string; text: string; state: string; createdAt: number }> }).chatActionStatus ?? [];
+        (host as unknown as { chatActionStatus: Array<{ id: string; text: string; state: string; createdAt: number }> }).chatActionStatus = current.filter((s) => s.id !== p.id);
+      }, 500);
+    } else {
+      (host as unknown as { chatActionStatus: Array<{ id: string; text: string; state: string; createdAt: number }> }).chatActionStatus = existing.filter((s) => s.id !== p.id);
+    }
+    return;
+  }
+
+  // Add or update status indicator
+  const existingIndex = existing.findIndex((s) => s.id === p.id);
+  if (existingIndex >= 0) {
+    (host as unknown as { chatActionStatus: Array<{ id: string; text: string; state: string; createdAt: number }> }).chatActionStatus = existing.map((s) =>
+      s.id === p.id ? { ...s, text: p.text, state: p.state } : s,
+    );
+  } else {
+    (host as unknown as { chatActionStatus: Array<{ id: string; text: string; state: string; createdAt: number }> }).chatActionStatus = [
+      ...existing,
+      { id: p.id, text: p.text, state: p.state as "active" | "complete", createdAt: Date.now() },
+    ];
+  }
 }
 
 export function applySnapshot(host: GatewayHost, hello: GatewayHelloOk) {

@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { buildHistoryContextFromEntries, type HistoryEntry } from "../auto-reply/reply/history.js";
 import { createDefaultDeps } from "../cli/deps.js";
 import { agentCommand } from "../commands/agent.js";
@@ -41,6 +41,40 @@ function writeSse(res: ServerResponse, data: unknown) {
 
 function asMessages(val: unknown): OpenAiChatMessage[] {
   return Array.isArray(val) ? (val as OpenAiChatMessage[]) : [];
+}
+
+// Deduplication cache for ElevenLabs/voice requests (prevents duplicate executions)
+// Only blocks requests that have COMPLETED (have a response), not in-progress ones
+const completedRequests = new Map<string, { timestamp: number; response: string }>();
+const DEDUP_WINDOW_MS = 15000; // 15 second window for deduplication
+
+function getRequestHash(messages: OpenAiChatMessage[], user?: string): string {
+  // Hash the last user message + user ID for deduplication
+  const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+  const content = extractTextContent(lastUserMsg?.content);
+  const key = `${user || "anon"}:${content}`;
+  return createHash("md5").update(key).digest("hex");
+}
+
+function cleanupOldRequests(): void {
+  const now = Date.now();
+  for (const [hash, data] of completedRequests.entries()) {
+    if (now - data.timestamp > DEDUP_WINDOW_MS * 2) {
+      completedRequests.delete(hash);
+    }
+  }
+}
+
+// Buffer phrases for immediate acknowledgment while processing
+const BUFFER_PHRASES = [
+  "Sure, let me handle that... ",
+  "On it... ",
+  "Working on that now... ",
+  "Let me take care of that... ",
+];
+
+function getRandomBufferPhrase(): string {
+  return BUFFER_PHRASES[Math.floor(Math.random() * BUFFER_PHRASES.length)];
 }
 
 function extractTextContent(content: unknown): string {
@@ -218,6 +252,64 @@ export async function handleOpenAiHttpRequest(
     return true;
   }
 
+  // Deduplication check for ElevenLabs/voice requests
+  // Only blocks requests that have COMPLETED (not in-progress ones)
+  cleanupOldRequests();
+  const messages = asMessages(payload.messages);
+  const requestHash = getRequestHash(messages, user);
+  const completedRequest = completedRequests.get(requestHash);
+
+  if (completedRequest && Date.now() - completedRequest.timestamp < DEDUP_WINDOW_MS) {
+    // This exact request was COMPLETED recently - return cached response
+    console.log(
+      `[openai-http] Duplicate of completed request (hash=${requestHash.slice(0, 8)}), returning cached`,
+    );
+
+    if (stream) {
+      setSseHeaders(res);
+      const dedupId = `chatcmpl_dedup_${randomUUID()}`;
+      writeSse(res, {
+        id: dedupId,
+        object: "chat.completion.chunk",
+        created: Math.floor(Date.now() / 1000),
+        model,
+        choices: [{ index: 0, delta: { role: "assistant" } }],
+      });
+      writeSse(res, {
+        id: dedupId,
+        object: "chat.completion.chunk",
+        created: Math.floor(Date.now() / 1000),
+        model,
+        choices: [{ index: 0, delta: { content: completedRequest.response }, finish_reason: null }],
+      });
+      writeSse(res, {
+        id: dedupId,
+        object: "chat.completion.chunk",
+        created: Math.floor(Date.now() / 1000),
+        model,
+        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+      });
+      writeDone(res);
+      res.end();
+    } else {
+      sendJson(res, 200, {
+        id: `chatcmpl_dedup_${randomUUID()}`,
+        object: "chat.completion",
+        created: Math.floor(Date.now() / 1000),
+        model,
+        choices: [
+          {
+            index: 0,
+            message: { role: "assistant", content: completedRequest.response },
+            finish_reason: "stop",
+          },
+        ],
+        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+      });
+    }
+    return true;
+  }
+
   const runId = `chatcmpl_${randomUUID()}`;
   const deps = createDefaultDeps();
 
@@ -246,6 +338,9 @@ export async function handleOpenAiHttpRequest(
               .join("\n\n")
           : "No response from OpenClaw.";
 
+      // Cache the response for deduplication
+      completedRequests.set(requestHash, { timestamp: Date.now(), response: content });
+
       sendJson(res, 200, {
         id: runId,
         object: "chat.completion",
@@ -273,6 +368,7 @@ export async function handleOpenAiHttpRequest(
   let wroteRole = false;
   let sawAssistantDelta = false;
   let closed = false;
+  let fullResponse = ""; // Track response for caching
 
   const unsubscribe = onAgentEvent((evt) => {
     if (evt.runId !== runId) {
@@ -302,6 +398,7 @@ export async function handleOpenAiHttpRequest(
       }
 
       sawAssistantDelta = true;
+      fullResponse += content; // Track for caching
       writeSse(res, {
         id: runId,
         object: "chat.completion.chunk",
@@ -323,6 +420,8 @@ export async function handleOpenAiHttpRequest(
       if (phase === "end" || phase === "error") {
         closed = true;
         unsubscribe();
+        // Cache the completed response for deduplication
+        completedRequests.set(requestHash, { timestamp: Date.now(), response: fullResponse });
         writeDone(res);
         res.end();
       }

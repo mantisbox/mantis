@@ -2,11 +2,15 @@
  * Chat message types for the UI layer.
  */
 
+/** Status indicator state */
+export type StatusIndicatorState = "active" | "complete" | "fading";
+
 /** Union type for items in the chat thread */
 export type ChatItem =
   | { kind: "message"; key: string; message: unknown }
   | { kind: "stream"; key: string; text: string; startedAt: number }
-  | { kind: "reading-indicator"; key: string };
+  | { kind: "reading-indicator"; key: string }
+  | { kind: "status"; key: string; id: string; text: string; state: StatusIndicatorState };
 
 /** A group of consecutive messages from the same role (Slack-style layout) */
 export type MessageGroup = {

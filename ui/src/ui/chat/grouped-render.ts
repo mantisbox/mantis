@@ -69,6 +69,37 @@ export function renderReadingIndicatorGroup(assistant?: AssistantIdentity) {
   `;
 }
 
+export type StatusIndicatorState = "active" | "complete" | "fading";
+
+export function renderStatusIndicator(
+  text: string,
+  state: StatusIndicatorState = "active",
+  id?: string,
+) {
+  const bubbleClasses = [
+    "chat-status-bubble",
+    state,
+  ].join(" ");
+
+  const icon = state === "active" 
+    ? html`<div class="chat-status-spinner"></div>`
+    : html`<div class="chat-status-check">
+        <svg viewBox="0 0 24 24">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>`;
+
+  return html`
+    <div class="chat-status-row" id=${id ?? nothing}>
+      <div class="chat-status-spacer"></div>
+      <div class="${bubbleClasses}">
+        ${icon}
+        <span>${text}</span>
+      </div>
+    </div>
+  `;
+}
+
 export function renderStreamingGroup(
   text: string,
   startedAt: number,
